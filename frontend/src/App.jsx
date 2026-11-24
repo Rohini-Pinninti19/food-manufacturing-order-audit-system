@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, date, money, quantity } from "./api.js";
 
 const navigation = [
@@ -113,6 +113,7 @@ function App() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [reportRange, setReportRange] = useState({ from: "", to: "" });
+  const loadRequestId = useRef(0);
 
   useEffect(() => {
     const token = localStorage.getItem("erp-token");
@@ -139,6 +140,7 @@ function App() {
 
   const load = useCallback(async () => {
     if (!user) return;
+    const requestId = ++loadRequestId.current;
     setLoading(true);
     setError("");
     setData(null);
@@ -154,14 +156,15 @@ function App() {
         const [items, customers, suppliers, boms, users] = await Promise.all([
           api("/items"), api("/customers"), api("/suppliers"), api("/bom"), api("/users"),
         ]);
-        setData({ items, customers, suppliers, boms, users });
+        if (requestId === loadRequestId.current) setData({ items, customers, suppliers, boms, users });
       } else {
-        setData(await api(path));
+        const result = await api(path);
+        if (requestId === loadRequestId.current) setData(result);
       }
     } catch (failure) {
-      setError(failure.message);
+      if (requestId === loadRequestId.current) setError(failure.message);
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestId.current) setLoading(false);
     }
   }, [active, reportRange, user]);
 
@@ -173,9 +176,18 @@ function App() {
   }, [toast]);
 
   function signOut() {
+    loadRequestId.current += 1;
     localStorage.removeItem("erp-token");
     setUser(null);
     setData(null);
+  }
+
+  function navigateTo(page) {
+    if (page !== active) {
+      loadRequestId.current += 1;
+      setData(null);
+    }
+    setActive(page);
   }
 
   async function act(path, options, success) {
@@ -200,14 +212,14 @@ function App() {
   return (
     <div className="app-shell">
       <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
-        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); setActive("overview"); }}>
+        <a className="brand" href="#" onClick={(event) => { event.preventDefault(); navigateTo("overview"); }}>
           <span className="brand-mark">g.</span><span>grainline<span className="brand-dot">.</span></span>
         </a>
         <div className="workspace-switch"><span className="workspace-avatar">F</span><span><b>Fieldstone Foods</b><small>Manufacturing</small></span><span className="switch-chevron">⌄</span></div>
         <div className="nav-caption">WORKSPACE</div>
         <nav className="nav-list" aria-label="Main navigation">
           {allowedNavigation.map((item) => (
-            <button key={item.id} className={`nav-item ${active === item.id ? "nav-active" : ""}`} onClick={() => { setActive(item.id); setMobileNav(false); }}>
+            <button key={item.id} className={`nav-item ${active === item.id ? "nav-active" : ""}`} onClick={() => { navigateTo(item.id); setMobileNav(false); }}>
               <Icon name={item.icon} /><span>{item.label}</span>
               {item.countKey && data?.metrics?.[item.countKey] > 0 && <span className="nav-count">{data.metrics[item.countKey]}</span>}
             </button>
@@ -230,7 +242,7 @@ function App() {
           <div className="breadcrumbs"><span>Fieldstone Foods</span><span className="crumb-slash">/</span><b>{pageTitle}</b></div>
           <div className="top-actions">
             <button className="date-chip"><span className="calendar-mark">▦</span>{new Intl.DateTimeFormat("en-IN", { day: "numeric", month: "short", year: "numeric" }).format(new Date())}</button>
-            <button className="icon-button notification-button" aria-label="Notifications" onClick={() => setActive("reports")}><Icon name="bell" /><span /></button>
+            <button className="icon-button notification-button" aria-label="Notifications" onClick={() => navigateTo("reports")}><Icon name="bell" /><span /></button>
             <button className="top-profile" onClick={signOut} title="Sign out">{user.name?.slice(0, 1).toUpperCase()}</button>
           </div>
         </header>
@@ -250,8 +262,8 @@ function App() {
           {error && <div className="alert alert-error" role="alert">{error}<button onClick={load}>Try again</button></div>}
           {!data ? (error ? <div className="empty-state"><span className="empty-icon">!</span><b>This section could not be loaded.</b><p>{error}</p><button className="text-button" onClick={load}>Try again <Icon name="arrow" size={14} /></button></div> : <Loading />) : (
             <>
-              {active === "overview" && <Dashboard data={data} onNavigate={setActive} />}
-              {active === "orders" && <Orders data={data || []} user={user} onCreate={() => setModal("order")} onEdit={(order) => { setSelectedOrder(order); setModal("edit-order"); }} onAct={act} onPdf={async (invoice) => {
+              {active === "overview" && <Dashboard data={data} onNavigate={navigateTo} />}
+              {active === "orders" && <Orders data={Array.isArray(data) ? data : []} user={user} onCreate={() => setModal("order")} onEdit={(order) => { setSelectedOrder(order); setModal("edit-order"); }} onAct={act} onPdf={async (invoice) => {
                 try {
                   const blob = await api(`/invoices/${invoice.id}/pdf`);
                   const url = URL.createObjectURL(blob);
@@ -262,8 +274,8 @@ function App() {
                   URL.revokeObjectURL(url);
                 } catch (failure) { setToast(failure.message); }
               }} onCredit={(invoice) => { setSelectedInvoice(invoice); setModal("credit-note"); }} />}
-              {active === "production" && <Production data={data || []} onCreate={() => setModal("production")} canProduce={canProduce} />}
-              {active === "inventory" && <Inventory data={data || []} onCreate={() => setModal("purchase")} canProduce={canProduce} />}
+              {active === "production" && <Production data={Array.isArray(data) ? data : []} onCreate={() => setModal("production")} canProduce={canProduce} />}
+              {active === "inventory" && <Inventory data={Array.isArray(data) ? data : []} onCreate={() => setModal("purchase")} canProduce={canProduce} />}
               {active === "masters" && <Masters data={data || { items: [], customers: [], suppliers: [], boms: [], users: [] }} onReload={load} />}
               {active === "reports" && <Reports data={data || {}} range={reportRange} onFilter={setReportRange} />}
             </>
