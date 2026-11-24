@@ -117,18 +117,6 @@ npm run seed:benchmark --prefix backend
 
 `db:migrate` is for local schema development; `db:deploy` applies checked-in migrations to a configured database.
 
-## Deploy to Render
-
-The root [`render.yaml`](render.yaml) defines a free web service that builds the frontend, serves it and the API from the same origin, and applies checked-in Prisma migrations before the server starts. Free Render services can sleep when idle and are intended for demos, not production.
-
-1. Push this repository to GitHub and connect it to Render using **New → Blueprint**.
-2. Set `DATABASE_URL` to your PostgreSQL connection string in Render when prompted. Keep it private; do not add it to this repository. Ensure the database accepts connections from Render and supports TLS if required by its provider.
-3. Keep the generated `JWT_SECRET` private. Review `COMPANY_NAME`, `COMPANY_STATE`, and `COMPANY_GSTIN` before using invoices.
-4. Wait for the first deployment to finish. Render runs `prisma migrate deploy` before starting the API, and `/api/health` is used for its health check.
-5. The database is not seeded automatically. For a demo, set unique strong values for all four `SEED_*_PASSWORD` variables in Render, then run `npm run db:seed --prefix backend` once from the service Shell. This adds benchmark data and accounts; do not use the development defaults or seed a live production database. After seeding, securely retain the administrator credential and remove the temporary seed-password variables.
-
-The service is deployed as one origin, so the frontend uses relative `/api` requests. Render supplies `PORT`; it should not be set manually.
-
 ## Environment variables
 
 See [`backend/.env.example`](backend/.env.example). `CLIENT_ORIGIN` should be the exact deployed frontend origin. `COMPANY_STATE` controls whether invoices split GST into CGST/SGST or use IGST. Never commit real connection strings, signing secrets, or credentials.
@@ -137,5 +125,5 @@ See [`backend/.env.example`](backend/.env.example). `CLIENT_ORIGIN` should be th
 
 - Email invitations, password reset/change flows, and account deactivation are not included; an administrator provisions accounts and shares initial credentials securely.
 - GST, HSN, invoice numbering, and statutory formatting must be reviewed by a qualified accountant before production use.
-- No migration against an external database has been run from this workspace. Review the schema and invoice assumptions before applying migrations to any database with existing data.
+- No production deployment or migration against an external database has been run from this workspace. Configure and verify your own managed PostgreSQL, API, and frontend hosting before publishing.
 - This is an operations-focused ERP starter, not a substitute for accounting, statutory filing, or an independent security review.

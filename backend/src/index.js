@@ -7,7 +7,6 @@ const helmet = require("helmet");
 const jwt = require("jsonwebtoken");
 const morgan = require("morgan");
 const PDFDocument = require("pdfkit");
-const path = require("node:path");
 const { z } = require("zod");
 const prisma = require("./db");
 const { allowRoles, requireAuth, writeAudit } = require("./auth");
@@ -1092,14 +1091,6 @@ app.get("/api/reports/:report.csv", allowRoles("ADMIN", "AUDITOR"), asyncRoute(a
   }).join(",")).join("\r\n");
   res.type("text/csv").attachment(`${report}-report.csv`).send(csv);
 }));
-
-const frontendDist = path.resolve(__dirname, "../../frontend/dist");
-app.use(express.static(frontendDist, { index: false }));
-app.get(/^(?!\/api(?:\/|$)).*/, (_req, res, next) => {
-  res.sendFile(path.join(frontendDist, "index.html"), (err) => {
-    if (err) next(err);
-  });
-});
 
 app.use((err, _req, res, _next) => {
   if (err instanceof z.ZodError) {
